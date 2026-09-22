@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#091130">
+  <title>峰岩 · 中秋快乐</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #040711; }
+    body { font-family: "Microsoft YaHei", "Noto Serif SC", serif; }
+    #scene { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+    .controls {
+      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+      display: flex; gap: 8px; align-items: center; padding: 8px 12px;
+      color: rgba(230, 222, 205, .78); font: 13px/1.2 "Microsoft YaHei", sans-serif;
+      letter-spacing: .04em; user-select: none; pointer-events: none;
+    }
+    .controls kbd { color: #f5d895; }
+    .status { position: fixed; top: 16px; right: 18px; color: rgba(244, 216, 151, .75); font: 12px sans-serif; opacity: 0; transition: opacity .25s; }
+    .status.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <canvas id="scene" aria-label="峰岩中秋动态贺卡"></canvas>
+  <div class="controls"><kbd>SPACE</kbd> 暂停 · <kbd>R</kbd> 重置 · <kbd>F</kbd> 全屏 · 点击岩壁触发金色光脉冲</div>
+  <div id="status" class="status" aria-live="polite"></div>
+  <noscript>请启用 JavaScript 以观看“峰岩 · 中秋快乐”动态贺卡。</noscript>
+  <script>
+    (() => {
+      "use strict";
+      const canvas = document.getElementById("scene");
+      const ctx = canvas.getContext("2d");
+      const status = document.getElementById("status");
+      const W = 1280, H = 720;
+      const stars = [], motes = [], meteors = [], bursts = [];
+      const TAU = Math.PI * 2;
+      let dpr = 1, scale = 1, ox = 0, oy = 0, last = performance.now();
+      let elapsed = 0, paused = false, pointer = { x: 640, y: 360, active: false };
+      let randomSeed = 20240917;
+      const rand = () => {
+        randomSeed = (randomSeed * 1664525 + 1013904223) >>> 0;
+        return randomSeed / 4294967296;
+      };
+      const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+
+      function reset() {
+        elapsed = 0; randomSeed = 20240917;
+        stars.length = 0; motes.length = 0; meteors.length = 0; bursts.length = 0;
+        for (let i = 0; i < 115; i++) stars.push({ x: 36 + rand() * 1208, y: 30 + rand() * 390, r: .5 + rand() * 2, phase: rand() * TAU, a: .4 + rand() * .6 });
+        for (let i = 0; i < 48; i++) motes.push({ x: rand() * W, y: 420 + rand() * 280, s: 4 + rand() * 11, drift: -7 + rand() * 14, r: 1 + rand() * 2, phase: rand() * TAU });
+        setStatus("已重置");
+      }
+
+      function resize() {
+        dpr = Math.min(2, window.devicePixelRatio || 1);
+        canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
+        scale = Math.min(innerWidth / W, innerHeight / H);
+        ox = (innerWidth - W * scale) / 2; oy = (innerHeight - H * scale) / 2;
+      }
+
+      function toScene(event) {
+        pointer.x = clamp((event.clientX - ox) / scale, 0, W);
+        pointer.y = clamp((event.clientY - oy) / scale, 0, H);
+        pointer.active = true;
+      }
+
+      function setStatus(message) {
+        status.textContent = message; status.classList.add("show");
+        clearTimeout(setStatus.timer); setStatus.timer = setTimeout(() => status.classList.remove("show"), 1200);
+      }
+
+      function gradient(top, bottom) {
+        const g = ctx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, top); g.addColorStop(1, bottom); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      }
+
+      function glowCircle(x, y, radius, color, alpha) {
+        const g = ctx.createRadialGradient(x, y, 0, x, y, radius);
+        g.addColorStop(0, `rgba(${color},${alpha})`); g.addColorStop(.42, `rgba(${color},${alpha * .3})`); g.addColorStop(1, `rgba(${color},0)`);
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, radius, 0, TAU); ctx.fill();
+      }
+
+      function ridge(base, amp, phase, fill) {
+        ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(0, base);
+        for (let x = 0; x <= W; x += 26) {
+          const y = base - amp * (.5 + .5 * Math.sin(x * .014 + phase)) - amp * .35 * Math.sin(x * .038 + phase * 1.7);
+          ctx.lineTo(x, y);
+        }
+        ctx.lineTo(W, H); ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+      }
+
+      function drawStars() {
+        for (const star of stars) {
+          const pulse = .72 + .28 * Math.sin(elapsed * 1.7 + star.phase);
+          const value = Math.round(255 * star.a * pulse);
+          ctx.fillStyle = `rgb(${value},${value},${Math.min(255, value + 28)})`;
+          ctx.beginPath(); ctx.arc(star.x, star.y, star.r, 0, TAU); ctx.fill();
+        }
+      }
+
+      function drawMoon() {
+        const breathing = 1 + .035 * Math.sin(elapsed * 1.2), x = 930 + (pointer.active ? (pointer.x - 640) * .008 : 0), y = 190;
+        glowCircle(x, y, 205 * breathing, "242,202,116", .27);
+        ctx.fillStyle = "#ffe6a3"; ctx.beginPath(); ctx.arc(x, y, 82 * breathing, 0, TAU); ctx.fill();
+        ctx.fillStyle = "#fff1be"; ctx.beginPath(); ctx.arc(x - 15, y - 18, 66 * breathing, 0, TAU); ctx.fill();
+        ctx.fillStyle = "rgba(196,155,89,.18)";
+        [[-25, 18, 12], [21, -27, 9], [30, 25, 6]].forEach(([dx, dy, r]) => { ctx.beginPath(); ctx.arc(x + dx, y + dy, r, 0, TAU); ctx.fill(); });
+      }
+
+      function drawMeteors() {
+        for (const meteor of meteors) {
+          const alpha = clamp(meteor.life, 0, 1); ctx.strokeStyle = `rgba(255,226,159,${alpha})`; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(meteor.x, meteor.y); ctx.lineTo(meteor.x + meteor.length, meteor.y - meteor.length * .42); ctx.stroke();
+        }
+      }
+
+      function drawClouds() {
+        const drift = (elapsed * 18) % 150; ctx.fillStyle = "rgba(187,180,214,.055)";
+        for (let row = 0; row < 3; row++) for (let i = 0; i < 9; i++) {
+          const x = i * 170 - drift * (1 + row * .2), y = [475, 520, 585][row] + Math.sin(i + elapsed * .5) * 7;
+          ctx.beginPath(); ctx.ellipse(x + 130, y + 27, 130, 27, 0, 0, TAU); ctx.fill();
+        }
+      }
+
+      function drawRocks() {
+        ctx.fillStyle = "#0a0c18";
+        const left = [[0,720],[0,602],[85,548],[140,570],[193,505],[253,573],[323,543],[378,620],[450,720]];
+        const right = [[830,720],[875,632],[934,600],[980,622],[1023,545],[1075,580],[1136,520],[1205,584],[1280,565],[1280,720]];
+        [left, right].forEach(points => { ctx.beginPath(); points.forEach(([x,y], i) => i ? ctx.lineTo(x,y) : ctx.moveTo(x,y)); ctx.closePath(); ctx.fill(); });
+        ctx.fillStyle = "#181626"; ctx.beginPath(); [[85,548],[140,570],[193,505],[179,584],[122,608]].forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#151522"; ctx.beginPath(); [[1023,545],[1075,580],[1136,520],[1112,601],[1055,618]].forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = "rgba(245,195,103,.65)"; ctx.lineWidth = 2;
+        [[85,548,140,570,193,505],[1023,545,1075,580,1136,520]].forEach(([x1,y1,x2,y2,x3,y3])=>{ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.lineTo(x3,y3);ctx.stroke();});
+        ctx.strokeStyle = "rgba(238,175,77,.45)"; ctx.lineWidth = 1;
+        [[193,505,176,556,204,610],[1136,520,1112,574,1142,630],[140,570,165,622],[1075,580,1047,634]].forEach(p=>{ctx.beginPath();ctx.moveTo(p[0],p[1]);for(let i=2;i<p.length;i+=2)ctx.lineTo(p[i],p[i+1]);ctx.stroke();});
+      }
+
+      function drawParticles(dt) {
+        for (const mote of motes) {
+          mote.y -= mote.s * dt; mote.x += Math.sin(elapsed * .8 + mote.phase) * mote.drift * dt;
+          if (mote.y < 410) { mote.y = 700; mote.x = rand() * W; }
+          ctx.fillStyle = `rgba(255,210,126,${.45 + .25 * Math.sin(elapsed * 2 + mote.phase)})`;
+          ctx.beginPath(); ctx.arc(mote.x, mote.y, mote.r, 0, TAU); ctx.fill();
+        }
+      }
+
+      function drawBursts(dt) {
+        for (const burst of bursts) { burst.age += dt; for (const spark of burst.sparks) { spark.x += spark.vx * dt; spark.y += spark.vy * dt; spark.vy += 16 * dt; } }
+        for (let i = bursts.length - 1; i >= 0; i--) if (bursts[i].age > 1.5) bursts.splice(i, 1);
+        for (const burst of bursts) for (const spark of burst.sparks) { const a = clamp(1 - burst.age / 1.5, 0, 1); ctx.fillStyle = `rgba(255,206,107,${a})`; ctx.beginPath(); ctx.arc(spark.x, spark.y, 2, 0, TAU); ctx.fill(); }
+      }
+
+      function textGlow(text, x, y, size, color, glow) {
+        ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `700 ${size}px "Microsoft YaHei", "Noto Serif SC", serif`;
+        ctx.shadowColor = glow; ctx.shadowBlur = 24; ctx.fillStyle = color; ctx.fillText(text, x, y); ctx.shadowBlur = 0;
+      }
+
+      function draw(dt) {
+        gradient("#091130", "#23123a"); drawStars(); drawMoon(); drawMeteors();
+        ridge(430, 105, .3, "#131736"); ridge(505, 145, 2.1, "#0f132a"); ridge(565, 190, 4.5, "#090d1d");
+        drawClouds(); drawRocks(); drawParticles(dt); drawBursts(dt);
+        const titleY = 430 + Math.sin(elapsed * 1.1) * 3; textGlow("峰岩 · 中秋快乐", 640, titleY, 62, "#ffebad", "rgba(255,178,75,.85)");
+        ctx.shadowBlur = 0; ctx.font = '24px "Microsoft YaHei", "Noto Serif SC", serif'; ctx.fillStyle = "#e1d4bd"; ctx.fillText("峰起月明，岩守团圆", 640, titleY + 69);
+      }
+
+      function frame(now) {
+        const dt = Math.min(.1, (now - last) / 1000); last = now;
+        if (!paused) elapsed += dt;
+        ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
+        draw(paused ? 0 : dt); requestAnimationFrame(frame);
+      }
+
+      canvas.addEventListener("pointermove", toScene);
+      canvas.addEventListener("pointerleave", () => { pointer.active = false; });
+      canvas.addEventListener("pointerdown", event => { toScene(event); const sparks = []; for (let i = 0; i < 34; i++) { const a = rand() * TAU, speed = 45 + rand() * 125; sparks.push({ x: pointer.x, y: pointer.y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed }); } bursts.push({ x: pointer.x, y: pointer.y, age: 0, sparks }); });
+      window.addEventListener("resize", resize);
+      window.addEventListener("keydown", event => {
+        if (event.code === "Space") { event.preventDefault(); paused = !paused; setStatus(paused ? "已暂停" : "继续播放"); }
+        else if (event.key.toLowerCase() === "r") reset();
+        else if (event.key.toLowerCase() === "f") document.documentElement.requestFullscreen?.().catch(() => {});
+      });
+      resize(); reset(); requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>

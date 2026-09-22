@@ -25,3 +25,14 @@ py -m unittest discover -s tests -v
 ```
 
 测试会在 SDL dummy 视频驱动下验证场景初始化、更新、绘制、缩放和最小事件循环。
+
+## 浏览器版本
+
+浏览器入口在 `web/index.html`，不依赖 Python 或第三方库，直接用浏览器打开即可预览。
+也可以在项目根目录启动静态服务器：
+
+```powershell
+py -m http.server 8000
+```
+
+然后访问 `http://localhost:8000/web/`。部署 `web/` 目录到 GitHub Pages、Netlify 或 Vercel 后，即可生成可分享给他人的公开链接。
