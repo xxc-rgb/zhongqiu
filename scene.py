@@ -50,6 +50,8 @@ class Meteor:
 
 def find_font(size: int, bold: bool = False) -> pygame.font.Font:
     """Load a common CJK font on Windows, falling back to Pygame's default."""
+    if not pygame.font.get_init():
+        pygame.font.init()
     candidates = [
         Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "msyhbd.ttc" if bold else Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "msyh.ttc",
         Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "simhei.ttf",
