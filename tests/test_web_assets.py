@@ -7,8 +7,9 @@ class WebAssetTests(unittest.TestCase):
         page = Path(__file__).parents[1] / "web" / "index.html"
         self.assertTrue(page.is_file())
         content = page.read_text(encoding="utf-8")
-        for marker in ("峰岩 · 中秋快乐", "canvas", "requestAnimationFrame", "Space", "pointerdown"):
+        for marker in ("峰岩 · 中秋快乐", "canvas", "requestAnimationFrame", "pointerdown"):
             self.assertIn(marker, content)
+        self.assertNotIn("SPACE 暂停", content)
 
 
 if __name__ == "__main__":
